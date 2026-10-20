@@ -189,6 +189,7 @@ function taskChart() {
     yAxis: { type: "category", data: tasks.map((t) => `${nice(t.tag)}  ${pct(t.share_of_total, 0)}`), axisLabel: { color: "#444", fontSize: 11.5 }, axisTick: { show: false }, axisLine: { show: false } },
     series: ids.map((id) => ({ name: labMeta(id).name, type: "bar", stack: "t", barWidth: "68%", itemStyle: { color: labMeta(id).color }, emphasis: { focus: "series" }, data: tasks.map((t) => +(100 * (t.labs[id] || 0)).toFixed(2)) })),
   }, true);
+  $("task-title").textContent = (S.metric === "spend" ? "Spend" : "Token") + " share by task";
   $("task-note").textContent = `Last ${T.window_days} days. Each bar splits one task's ${S.metric === "spend" ? "spend" : "tokens"} across labs (OpenRouter's top 10 models per task; the rest is in Other). Percent after the name is the task's share of all ${S.metric === "spend" ? "spend" : "tokens"}.`;
 }
 
