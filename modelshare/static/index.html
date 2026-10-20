@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ModelShare: who gets paid on OpenRouter</title>
+<meta name="description" content="Spend and token share by AI lab on OpenRouter, updated every 6 hours.">
+<link rel="stylesheet" href="/static/app.css">
+</head>
+<body>
+<header class="top">
+  <div class="wrap">
+    <h1>Who gets paid on OpenRouter</h1>
+    <p id="summary" class="summary">Loading…</p>
+  </div>
+</header>
+<main class="wrap">
+  <section class="card">
+    <div class="bar">
+      <h2 id="main-title">Spend share by lab</h2>
+      <div class="controls">
+        <div class="seg" data-ctl="metric"><button data-v="spend" class="on">Spend</button><button data-v="tokens">Tokens</button></div>
+        <div class="seg" data-ctl="mode"><button data-v="share" class="on">Share</button><button data-v="abs">Amount</button></div>
+        <div class="seg" data-ctl="range"><button data-v="daily" class="on">30 days, daily</button><button data-v="weekly">1 year, weekly</button></div>
+      </div>
+    </div>
+    <div id="main-chart" class="chart tall"></div>
+    <p id="main-note" class="note"></p>
+  </section>
+
+  <section class="card">
+    <div class="bar"><h2>Labs</h2><span class="hint">Shares are OpenRouter's reported spend. Click a lab to see its model mix.</span></div>
+    <div class="scroll"><table id="labs" class="grid"></table></div>
+  </section>
+
+  <section class="card">
+    <div class="bar">
+      <h2 id="mix-title">Model mix</h2>
+      <div class="controls"><select id="mix-lab" aria-label="Lab"></select></div>
+    </div>
+    <div id="mix-chart" class="chart"></div>
+  </section>
+
+  <section class="card two">
+    <div>
+      <div class="bar">
+        <h2>Launch curves</h2>
+        <div class="controls"><label class="chk"><input type="checkbox" id="cum"> Cumulative</label><label class="chk"><input type="checkbox" id="logy" checked> Log scale</label></div>
+      </div>
+      <div id="launch-chart" class="chart"></div>
+      <p class="note">Models released in the last 30 days, by days since release.</p>
+    </div>
+    <div>
+      <div class="bar"><h2 id="task-title">Spend share by task</h2></div>
+      <div id="task-chart" class="chart taskchart"></div>
+      <p id="task-note" class="note"></p>
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="bar">
+      <h2>Models</h2>
+      <div class="controls">
+        <input id="q" type="search" placeholder="Filter models" aria-label="Filter models">
+        <select id="model-lab" aria-label="Lab filter"><option value="">All labs</option></select>
+      </div>
+    </div>
+    <div class="scroll"><table id="models" class="grid"></table></div>
+    <p class="note"><span id="models-count"></span> <button id="more" class="link" type="button"></button></p>
+  </section>
+
+  <section class="card two">
+    <div>
+      <div class="bar"><h2>Top apps, last 30 days</h2></div>
+      <div class="scroll"><table id="apps" class="grid"></table></div>
+    </div>
+    <div>
+      <div class="bar"><h2>Open vs closed weights, token share</h2></div>
+      <div id="oc-chart" class="chart oc"></div>
+      <p class="note">Weekly share of tokens on open-weight vs closed models.</p>
+    </div>
+  </section>
+
+  <footer class="foot">
+    <p><strong>How this works.</strong> Data comes from OpenRouter's public rankings. Spend shares in the labs and models tables are OpenRouter's own numbers for yesterday, the last 7 days and the last 30 days. Daily dollar amounts are estimates: each model's daily input, cached-input and output tokens priced at OpenRouter list prices, then scaled so each model's 30-day total matches its reported spend share. OpenRouter publishes 31 days of daily detail, so this site saves a snapshot every 6 hours and keeps history from then on. The 1-year view is tokens only and groups everyone outside each week's top 9 makers into Other.</p>
+    <p><a href="/api/export.csv">Download daily data (CSV)</a> · <a href="/status">Collector status</a> · <span id="updated"></span></p>
+  </footer>
+</main>
+<script src="/static/vendor/echarts.min.js"></script>
+<script src="/static/app.js"></script>
+</body>
+</html>
