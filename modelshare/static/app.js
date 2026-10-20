@@ -28,11 +28,11 @@ function mk(id) {
   if (!charts[id]) charts[id] = echarts.init($(id), null, { renderer: "canvas" });
   return charts[id];
 }
-function axisTip(params, isShare, totals) {
+function axisTip(params, isShare, totals, fmt = fmtv) {
   const rows = params.filter((p) => p.value > 0).sort((a, b) => b.value - a.value);
   const head = `<div style="font-weight:600;margin-bottom:3px">${esc(params[0].axisValueLabel)}</div>`;
   return head + rows.slice(0, 14).map((p) => {
-    const v = isShare ? pct(p.value / 100) : fmtv(p.value);
+    const v = isShare ? pct(p.value / 100) : fmt(p.value);
     const extra = !isShare && totals ? ` <span style="color:#888">${pct(p.value / totals[p.dataIndex])}</span>` : "";
     return `<div style="display:flex;gap:14px;justify-content:space-between"><span>${p.marker}${esc(p.seriesName)}</span><b>${v}${extra}</b></div>`;
   }).join("") + (rows.length > 14 ? `<div style="color:#888">+${rows.length - 14} more</div>` : "");
@@ -40,6 +40,7 @@ function axisTip(params, isShare, totals) {
 
 function stacked(id, xs, series, opts = {}) {
   const share = S.mode === "share" && !opts.forceAbs;
+  const fmt = opts.fmt || fmtv;
   const totals = xs.map((_, i) => sum(series.map((s) => s.data[i] || 0)));
   const out = series.map((s) => ({
     name: s.name, type: "line", stack: "t", symbol: "none", smooth: 0.25, sampling: "lttb",
@@ -52,9 +53,9 @@ function stacked(id, xs, series, opts = {}) {
   c.setOption({
     ...base(), legend: legend(),
     grid: { ...base().grid, top: opts.top || 18, bottom: mob() ? 54 : 28 },
-    tooltip: { ...base().tooltip, formatter: (p) => axisTip(p, share, totals) },
+    tooltip: { ...base().tooltip, formatter: (p) => axisTip(p, share, totals, fmt) },
     xAxis: { type: "category", boundaryGap: false, data: xs, axisLabel: { formatter: short, color: "#888", hideOverlap: true }, axisLine: { lineStyle: { color: "#ddd" } }, axisTick: { show: false } },
-    yAxis: { type: "value", max: share ? 100 : null, splitLine: { lineStyle: { color: "#f0efea" } }, axisLabel: { color: "#888", formatter: (v) => (share ? v + "%" : fmtv(v)) } },
+    yAxis: { type: "value", max: share ? 100 : null, splitLine: { lineStyle: { color: "#f0efea" } }, axisLabel: { color: "#888", formatter: (v) => (share ? v + "%" : fmt(v)) } },
     series: out,
   }, true);
 }
@@ -77,9 +78,7 @@ function mainChart() {
     const w = D.windows.month;
     $("main-note").textContent = `Daily, ${short(w[0])} to ${short(w[1])}. ` + (metric === "spend" ? "Dollar amounts are list-price estimates scaled to OpenRouter's reported spend shares." : "Input plus output tokens.");
   }
-  const prevMetric = S.metric; S.metric = metric;
-  stacked("main-chart", xs, series);
-  S.metric = prevMetric;
+  stacked("main-chart", xs, series, { fmt: metric === "spend" ? usd : tok });
 }
 
 function delta(l) {
@@ -239,12 +238,11 @@ function ocChart() {
   if (!oc.length) return;
   const xs = oc.map((w) => w.x);
   const keep = S.mode; S.mode = "share";
-  const m = S.metric; S.metric = "tokens";
   stacked("oc-chart", xs, [
     { name: "Closed", color: "#3d3d42", data: oc.map((w) => w.ys.closed || 0) },
     { name: "Open", color: "#7fb069", data: oc.map((w) => w.ys.open || 0) },
-  ]);
-  S.mode = keep; S.metric = m;
+  ], { fmt: tok });
+  S.mode = keep;
 }
 
 function summary() {
