@@ -80,6 +80,10 @@ async def index() -> HTMLResponse:
     return HTMLResponse(content)
 
 
+def _num(value: float | None, digits: int) -> str:
+    return "" if value is None else f"{value:.{digits}f}"
+
+
 def _accepts_gzip(header: str) -> bool:
     for item in header.lower().split(","):
         encoding, *params = item.strip().split(";")
@@ -205,10 +209,10 @@ async def status() -> HTMLResponse:
             "<tr>"
             f"<td>{html.escape(_format_time(row['started_at']))}</td>"
             f"<td>{ok}</td>"
-            f"<td>{html.escape(str(row['seconds'] or ''))}</td>"
+            f"<td>{_num(row['seconds'], 1)}</td>"
             f"<td>{html.escape(str(row['n_models'] or ''))}</td>"
             f"<td>{html.escape(str(row['n_rows'] or ''))}</td>"
-            f"<td>{html.escape(str(row['build_ms'] or ''))}</td>"
+            f"<td>{_num(row['build_ms'], 0)}</td>"
             f"<td>{html.escape(row['error'] or '')}</td>"
             "</tr>"
         )
