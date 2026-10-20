@@ -35,11 +35,26 @@ def test_compute_build_returns_payload_and_daily_contract():
     assert all(row_fields <= row.keys() for row in daily_rows)
 
 
+def test_daily_spend_is_calibrated_to_official_month_shares():
+    bundle = json.loads(FIXTURE.read_text())
+    rows = compute.daily_rows(bundle)
+    start, end = compute._window(bundle["spend"]["month"])
+    official, _ = compute._official(bundle["spend"]["month"])
+    spend: dict[str, float] = {}
+    for r in rows:
+        if start <= r["date"] <= end:
+            spend[r["permaslug"]] = spend.get(r["permaslug"], 0.0) + r["spend_usd"]
+    total = sum(spend.values())
+    covered = sum(official.get(s, 0.0) for s in spend)
+    for slug, usd in spend.items():
+        assert usd / total == pytest.approx(official.get(slug, 0.0) / covered, rel=1e-6, abs=1e-9)
+
+
 @pytest.mark.asyncio
 async def test_collection_persists_and_serves_cached_payload(monkeypatch):
     monkeypatch.setenv("BUNDLE_FILE", str(FIXTURE))
     monkeypatch.setenv(
-        "DATABASE_URL", "postgresql://postgres:postgres@localhost:5436/modelshare"
+        "DATABASE_URL", "postgresql://postgres:postgres@localhost:5436/modelshare_test"
     )
     pool = await db.open_pool()
     async with pool.acquire() as connection:
