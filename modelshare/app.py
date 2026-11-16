@@ -24,7 +24,7 @@ from modelshare import collector, compute, db
 STATIC_DIR = Path(__file__).resolve().parent / "static"
 _ASSET_RE = re.compile(r"(/static/(?:app\.js|app\.css))(?:\?[^\"'\s]*)?")
 _BASIC = HTTPBasic(auto_error=False)
-T30D_FILENAME = "modelshare-30-day-spend-by-lab.csv"
+MONTHLY_FILENAME = "openrouter-anthropic-openai-spend-by-month.csv"
 _BASIC_CREDENTIALS = Depends(_BASIC)
 
 
@@ -169,8 +169,8 @@ async def export_csv() -> Response:
     )
 
 
-@app.get("/api/t30d.csv")
-async def t30d_csv() -> Response:
+@app.get("/api/monthly-spend.csv")
+async def monthly_spend_csv() -> Response:
     rows = await db.get_pool().fetch(
         "SELECT date, author, permaslug, spend_usd FROM daily ORDER BY date"
     )
@@ -183,19 +183,22 @@ async def t30d_csv() -> Response:
         }
         for r in rows
     ]
-    days = compute.t30d(compute._archive_rows(), compute._estimate_rows(), live)
-    labs = [*compute.LABS, "other"]
-    names = {k: v[0] for k, v in compute.LABS.items()} | {"other": compute.OTHER[1]}
+    months = compute.monthly(compute._archive_rows(), compute._estimate_rows(), live)
     output = io.StringIO(newline="")
     writer = csv.writer(output)
-    writer.writerow(["date", "basis", "total_usd", *(f"{names[k]}_usd" for k in labs)])
-    for d in days:
-        vals = [round(d["labs"].get(k, 0.0)) for k in labs]
-        writer.writerow([d["date"], d["basis"], sum(vals), *vals])
+    writer.writerow(["month", "basis", "anthropic_usd", "openai_usd"])
+    for m in months:
+        writer.writerow(
+            [
+                m["month"],
+                m["basis"],
+                *(round(m["labs"].get(k, 0.0)) for k in ("anthropic", "openai")),
+            ]
+        )
     return Response(
         output.getvalue(),
         media_type="text/csv",
-        headers={"Content-Disposition": f'attachment; filename="{T30D_FILENAME}"'},
+        headers={"Content-Disposition": f'attachment; filename="{MONTHLY_FILENAME}"'},
     )
 
 
