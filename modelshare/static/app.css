@@ -57,4 +57,6 @@ svg.spark{vertical-align:middle}
 }
 .name.cat{max-width:220px}
 .chart.oc{height:420px}
+a.btn{display:inline-block;border:1px solid var(--line);border-radius:7px;background:var(--soft);padding:5px 10px;font-size:13px;color:var(--ink);text-decoration:none}
+a.btn:hover{background:var(--card)}
 button.link{border:0;background:none;padding:0;font:inherit;color:var(--ink);text-decoration:underline;cursor:pointer}
