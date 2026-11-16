@@ -474,3 +474,63 @@ def history(
         "labs": {lab: {"spend": rnd(lab_spend[lab]), "tokens": lab_tok[lab]} for lab in lab_spend},
         "models": models,
     }
+
+
+T30D_BASIS = ("reported", "estimated", "site")
+
+
+@cache
+def _estimate_rows() -> tuple[dict, ...]:
+    return tuple(archive.load(archive.ESTIMATE_FILE))
+
+
+def t30d(archived, estimated, live: list[dict], days: int = 730, window: int = 30) -> list[dict]:
+    """Trailing `window`-day spend by lab for each of the last `days` days with live data.
+
+    Weekly archived and estimated totals are spread evenly over their 7 days; the
+    site's own daily rows replace them from the first live day on."""
+    daily: dict[str, dict[str, float]] = defaultdict(lambda: defaultdict(float))
+    basis: dict[str, str] = {}
+
+    def spread(week: str, lab: str, usd: float, kind: str) -> None:
+        start = date.fromisoformat(week)
+        for k in range(7):
+            d = (start + timedelta(days=k)).isoformat()
+            daily[d][lab] += usd / 7
+            basis[d] = kind
+
+    for r in archived:
+        spread(r["week"], lab_of(author_of(r["permaslug"])), float(r["spend_usd"] or 0), "reported")
+    for r in estimated:
+        spread(r["week"], r["lab"], float(r["spend_usd"] or 0), "estimated")
+    live_days = sorted({r["date"] for r in live})
+    if not live_days:
+        return []
+    for d in [d for d in daily if d >= live_days[0]]:
+        del daily[d], basis[d]
+    for r in live:
+        daily[r["date"]][lab_of(r["author"] or author_of(r["permaslug"]))] += float(
+            r["spend_usd"] or 0
+        )
+        basis[r["date"]] = "site"
+
+    end = date.fromisoformat(live_days[-1])
+    out = []
+    for k in range(days - 1, -1, -1):
+        d = end - timedelta(days=k)
+        span = [(d - timedelta(days=j)).isoformat() for j in range(window)]
+        if any(s not in basis for s in span):
+            continue
+        labs: dict[str, float] = defaultdict(float)
+        for s in span:
+            for lab, v in daily[s].items():
+                labs[lab] += v
+        kinds = {basis[s] for s in span}
+        out.append(
+            {
+                "date": d.isoformat(),
+                "basis": "+".join(b for b in T30D_BASIS if b in kinds),
+                "labs": dict(labs),
+            }
+        )
+    return out

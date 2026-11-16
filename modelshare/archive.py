@@ -25,6 +25,7 @@ from pathlib import Path
 import httpx
 
 ARCHIVE_FILE = Path(__file__).with_name("archive_weekly.json.gz")
+ESTIMATE_FILE = Path(__file__).with_name("archive_estimates.json.gz")
 CDX = "https://web.archive.org/cdx/search/cdx"
 PAGE = "https://openrouter.ai/rankings"
 HEADERS = {"User-Agent": "ModelShare/1.0 (+https://github.com/JaredSleeper/ModelShare)"}
