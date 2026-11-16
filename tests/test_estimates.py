@@ -85,19 +85,23 @@ def test_build_blends_rates_between_anchors():
     ]
 
 
-def test_t30d_spreads_weeks_and_switches_to_live_days():
-    archived = [{"week": "2025-01-06", "permaslug": "openai/gpt-4o", "spend_usd": 70.0}]
-    est = [{"week": "2025-01-13", "lab": "anthropic", "spend_usd": 140.0}]
-    live = [
-        {"date": f"2025-01-{d}", "author": "google", "permaslug": "google/g", "spend_usd": 5.0}
-        for d in range(18, 21)
+def test_monthly_spreads_weeks_and_switches_to_live_days():
+    archived = [{"week": "2024-12-30", "permaslug": "openai/gpt-4o", "spend_usd": 70.0}]
+    est = [
+        {"week": w, "lab": "anthropic", "spend_usd": 140.0}
+        for w in ("2025-01-06", "2025-01-13", "2025-01-20", "2025-01-27")
     ]
-    out = compute.t30d(archived, est, live, days=30, window=7)
-    assert [d["date"] for d in out] == [f"2025-01-{d}" for d in range(12, 21)]
-    first, last = out[0], out[-1]
-    assert first["basis"] == "reported" and first["labs"] == {"openai": 70.0}
-    assert last["basis"] == "estimated+site"
-    assert round(last["labs"]["anthropic"]) == 80 and last["labs"]["google"] == 15.0
+    live = [
+        {"date": f"2025-02-{d:02}", "author": "google", "permaslug": "google/g", "spend_usd": 5.0}
+        for d in range(3, 29)
+    ] + [{"date": "2025-03-01", "author": "openai", "permaslug": "openai/o", "spend_usd": 1.0}]
+    out = compute.monthly(archived, est, live)
+    assert [m["month"] for m in out] == ["2025-01", "2025-02"]
+    jan, feb = out
+    assert jan["basis"] == "reported+estimated"
+    assert jan["labs"]["openai"] == 50.0 and round(jan["labs"]["anthropic"]) == 520
+    assert feb == {"month": "2025-02", "basis": "estimated+site", "labs": feb["labs"]}
+    assert round(feb["labs"]["anthropic"]) == 40 and feb["labs"]["google"] == 130.0
 
 
 def test_estimate_file_covers_gap_until_live_data():

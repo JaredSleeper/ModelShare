@@ -476,7 +476,7 @@ def history(
     }
 
 
-T30D_BASIS = ("reported", "estimated", "site")
+SPEND_BASIS = ("reported", "estimated", "site")
 
 
 @cache
@@ -484,8 +484,8 @@ def _estimate_rows() -> tuple[dict, ...]:
     return tuple(archive.load(archive.ESTIMATE_FILE))
 
 
-def t30d(archived, estimated, live: list[dict], days: int = 730, window: int = 30) -> list[dict]:
-    """Trailing `window`-day spend by lab for each of the last `days` days with live data.
+def monthly(archived, estimated, live: list[dict], months: int = 24) -> list[dict]:
+    """Spend by lab for each of the last `months` complete calendar months.
 
     Weekly archived and estimated totals are spread evenly over their 7 days; the
     site's own daily rows replace them from the first live day on."""
@@ -514,13 +514,15 @@ def t30d(archived, estimated, live: list[dict], days: int = 730, window: int = 3
         )
         basis[r["date"]] = "site"
 
-    end = date.fromisoformat(live_days[-1])
+    end = date.fromisoformat(live_days[-1]) + timedelta(days=1)
+    month = date(end.year, end.month, 1)
     out = []
-    for k in range(days - 1, -1, -1):
-        d = end - timedelta(days=k)
-        span = [(d - timedelta(days=j)).isoformat() for j in range(window)]
+    for _ in range(months):
+        last = month - timedelta(days=1)
+        month = date(last.year, last.month, 1)
+        span = [(month + timedelta(days=j)).isoformat() for j in range(last.day)]
         if any(s not in basis for s in span):
-            continue
+            break
         labs: dict[str, float] = defaultdict(float)
         for s in span:
             for lab, v in daily[s].items():
@@ -528,9 +530,9 @@ def t30d(archived, estimated, live: list[dict], days: int = 730, window: int = 3
         kinds = {basis[s] for s in span}
         out.append(
             {
-                "date": d.isoformat(),
-                "basis": "+".join(b for b in T30D_BASIS if b in kinds),
+                "month": month.isoformat()[:7],
+                "basis": "+".join(b for b in SPEND_BASIS if b in kinds),
                 "labs": dict(labs),
             }
         )
-    return out
+    return out[::-1]
