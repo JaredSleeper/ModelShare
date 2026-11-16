@@ -104,7 +104,16 @@ class PriceBook:
         self.by_slug: dict[str, list[tuple[date, dict]]] = defaultdict(list)
         for ts in sorted(catalogs):
             for m in catalogs[ts]:
-                for k in {m.get("canonical_slug"), m.get("id")} - {None}:
+                # Free variants share the paid model's canonical slug.
+                keys = (
+                    {m.get("id")}
+                    if m.get("id", "").endswith(":free")
+                    else {
+                        m.get("canonical_slug"),
+                        m.get("id"),
+                    }
+                )
+                for k in keys - {None}:
                     self.by_slug[k].append((_taken(ts), m.get("pricing") or {}))
 
     def get(self, slug: str, when: date) -> dict | None:

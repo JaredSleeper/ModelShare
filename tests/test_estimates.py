@@ -122,3 +122,10 @@ def test_calibration_is_reported_over_list_price_by_lab():
     html = _page({"rankingData": [row]})
     k = estimates.calibration({"20250701000000": html}, book)
     assert k == pytest.approx({"": 0.5, "anthropic": 0.5})
+
+
+def test_price_book_ignores_free_variant_for_paid_slug():
+    free = {"id": "x/m:free", "canonical_slug": "x/m-2025", "pricing": {"prompt": "0"}}
+    paid = {"id": "x/m", "canonical_slug": "x/m-2025", "pricing": {"prompt": "0.000001"}}
+    book = estimates.PriceBook({"20251101000000": [free, paid]})
+    assert book.get("x/m-2025", date(2025, 11, 1)) == {"prompt": "0.000001"}
