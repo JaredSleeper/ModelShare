@@ -12,6 +12,8 @@ const fmtv = (x) => (S.metric === "spend" ? usd(x) : tok(x));
 const sum = (a) => a.reduce((s, x) => s + x, 0);
 const day = (s) => new Date(s + "T00:00:00Z");
 const short = (s) => day(s).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
+const monthYear = (s) => day(s).toLocaleDateString("en-US", { month: "short", year: "numeric", timeZone: "UTC" });
+const weekOf = (s) => "Week of " + day(s).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" });
 const labMeta = (id) => D.lab_meta[id] || D.lab_meta.other;
 const mob = () => window.innerWidth < 600;
 
@@ -28,9 +30,9 @@ function mk(id) {
   if (!charts[id]) charts[id] = echarts.init($(id), null, { renderer: "canvas" });
   return charts[id];
 }
-function axisTip(params, isShare, totals, fmt = fmtv) {
+function axisTip(params, isShare, totals, fmt = fmtv, head0 = (x) => x) {
   const rows = params.filter((p) => p.value > 0).sort((a, b) => b.value - a.value);
-  const head = `<div style="font-weight:600;margin-bottom:3px">${esc(params[0].axisValueLabel)}</div>`;
+  const head = `<div style="font-weight:600;margin-bottom:3px">${esc(head0(params[0].axisValueLabel))}</div>`;
   return head + rows.slice(0, 14).map((p) => {
     const v = isShare ? pct(p.value / 100) : fmt(p.value);
     const extra = !isShare && totals ? ` <span style="color:#888">${pct(p.value / totals[p.dataIndex])}</span>` : "";
@@ -43,24 +45,54 @@ function stacked(id, xs, series, opts = {}) {
   const fmt = opts.fmt || fmtv;
   const totals = xs.map((_, i) => sum(series.map((s) => s.data[i] || 0)));
   const out = series.map((s) => ({
-    name: s.name, type: "line", stack: "t", symbol: "none", smooth: 0.25, sampling: "lttb",
+    name: s.name, type: "line", stack: "t", symbol: "none", smooth: opts.gaps ? 0 : 0.25, sampling: opts.gaps ? undefined : "lttb",
     lineStyle: { width: 0.6, color: s.color }, itemStyle: { color: s.color },
     areaStyle: { color: s.color, opacity: 0.88 }, emphasis: { focus: "series" },
-    data: s.data.map((v, i) => (share ? (totals[i] ? (100 * v) / totals[i] : 0) : v)),
+    data: s.data.map((v, i) => (v == null ? null : share ? (totals[i] ? (100 * v) / totals[i] : 0) : v)),
     markLine: s.markLine,
   }));
+  if (opts.gaps && opts.gaps.length && out.length) {
+    out[0].markArea = { silent: true, itemStyle: { color: "rgba(0,0,0,0.035)" }, label: { color: "#999", fontSize: 11, position: "inside" },
+      data: opts.gaps.map(([a, b]) => [{ xAxis: a, name: (day(b) - day(a)) / 864e5 >= (mob() ? 180 : 70) ? opts.gapLabel || "" : "" }, { xAxis: b }]) };
+  }
   const c = mk(id);
   c.setOption({
     ...base(), legend: legend(),
     grid: { ...base().grid, top: opts.top || 18, bottom: mob() ? 54 : 28 },
-    tooltip: { ...base().tooltip, formatter: (p) => axisTip(p, share, totals, fmt) },
-    xAxis: { type: "category", boundaryGap: false, data: xs, axisLabel: { formatter: short, color: "#888", hideOverlap: true }, axisLine: { lineStyle: { color: "#ddd" } }, axisTick: { show: false } },
+    tooltip: { ...base().tooltip, formatter: (p) => (p[0] && p[0].value == null ? `<b>${esc((opts.tipfmt || String)(p[0].axisValueLabel))}</b><br><span style="color:#888">${esc(opts.gapLabel || "No data")}</span>` : axisTip(p, share, totals, fmt, opts.tipfmt)) },
+    xAxis: { type: "category", boundaryGap: false, data: xs, axisLabel: { formatter: opts.xfmt || short, color: "#888", hideOverlap: true }, axisLine: { lineStyle: { color: "#ddd" } }, axisTick: { show: false } },
     yAxis: { type: "value", max: share ? 100 : null, splitLine: { lineStyle: { color: "#f0efea" } }, axisLabel: { color: "#888", formatter: (v) => (share ? v + "%" : fmt(v)) } },
     series: out,
   }, true);
 }
 
+function gapRuns(H) {
+  const runs = [];
+  H.weeks.forEach((w, i) => {
+    if (H.source[i]) return;
+    const last = runs[runs.length - 1];
+    if (last && last[2] === i - 1) { last[1] = w; last[2] = i; } else runs.push([w, w, i]);
+  });
+  return runs.map(([a, b]) => [a, b]);
+}
+
+function historyChart() {
+  const H = D.history, metric = S.metric;
+  $("main-title").textContent = (metric === "spend" ? "Spend" : "Token") + (S.mode === "share" ? " share" : "") + " by lab since 2023";
+  const order = D.labs.map((l) => l.id);
+  const ids = Object.keys(H.labs).sort((a, b) => (a === "other") - (b === "other") || ((order.indexOf(a) + 1 || 99) - (order.indexOf(b) + 1 || 99)));
+  const series = ids.map((id) => ({ name: labMeta(id).name, color: labMeta(id).color, data: H.labs[id][metric] }));
+  const gaps = gapRuns(H);
+  const i0 = H.source.indexOf("trailing7"), iLive = H.source.indexOf("live");
+  $("main-note").textContent = `Weekly, ${monthYear(H.weeks[0])} to ${monthYear(H.weeks[H.weeks.length - 1])}. ` +
+    `Actual spend that OpenRouter's rankings page reported${i0 > 0 ? `: weekly totals to ${short(H.weeks[i0 - 1])}, ${H.weeks[i0 - 1].slice(0, 4)}, then 7-day totals from archived copies about once a week` : ""}` +
+    `${iLive >= 0 ? `, and this site's own estimates from ${short(H.weeks[iLive])}, ${H.weeks[iLive].slice(0, 4)}` : ""}. ` +
+    (gaps.length ? "Shaded weeks have no public spend data." : "");
+  stacked("main-chart", H.weeks, series, { fmt: metric === "spend" ? usd : tok, xfmt: monthYear, tipfmt: weekOf, gaps, gapLabel: mob() ? "No data" : "No public spend data" });
+}
+
 function mainChart() {
+  if (S.range === "history") { document.querySelector('[data-ctl=metric] [data-v=spend]').disabled = false; return historyChart(); }
   const weekly = S.range === "weekly";
   document.querySelector('[data-ctl=metric] [data-v=spend]').disabled = weekly;
   const metric = weekly ? "tokens" : S.metric;
@@ -123,10 +155,22 @@ function labsTable() {
   table($("labs"), "labs", cols, D.labs, (id) => { S.lab = id; $("mix-lab").value = id; labsTable(); mixChart(); launchChart(); });
 }
 
+function historyMix(L) {
+  const H = D.history, tot = (H.labs[L.id] || {}).spend;
+  if (!tot) { mk("mix-chart").clear(); return; }
+  const ms = H.models.filter((m) => m.lab === L.id).slice(0, 9);
+  const hues = shades(L.color, ms.length);
+  const series = ms.map((m, i) => ({ name: m.name, color: hues[i], data: m.spend }));
+  const rest = tot.map((v, i) => (v == null ? null : Math.max(0, v - sum(ms.map((m) => m.spend[i] || 0)))));
+  if (sum(rest.map((v) => v || 0)) > sum(tot.map((v) => v || 0)) * 0.002) series.push({ name: `Other ${L.name}`, color: "#d4d4d0", data: rest });
+  stacked("mix-chart", H.weeks, series, { fmt: usd, xfmt: monthYear, tipfmt: weekOf, gaps: gapRuns(H), gapLabel: "No public spend data" });
+}
+
 function mixChart() {
   const lab = S.lab || D.labs[0].id;
   const L = D.labs.find((l) => l.id === lab);
-  $("mix-title").textContent = `${L.name} model mix`;
+  $("mix-title").textContent = `${L.name} model mix` + (S.range === "history" ? ", spend since 2023" : "");
+  if (S.range === "history") return historyMix(L);
   const key = S.metric;
   const ms = D.models.filter((m) => m.lab === lab);
   const recent = (m) => sum(m[key].slice(-7));
@@ -263,7 +307,7 @@ function wire() {
     const b = e.target.closest("button"); if (!b || b.disabled) return;
     seg.querySelectorAll("button").forEach((x) => x.classList.toggle("on", x === b));
     S[seg.dataset.ctl] = b.dataset.v;
-    if (seg.dataset.ctl === "range" && b.dataset.v === "weekly") { /* tokens only */ }
+    if (seg.dataset.ctl === "range") mixChart();
     if (seg.dataset.ctl === "metric") { mixChart(); launchChart(); taskChart(); }
     if (seg.dataset.ctl === "mode") mixChart();
     mainChart();
