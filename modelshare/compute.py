@@ -7,7 +7,10 @@ OpenRouter's; absolute dollars are list-price estimates.
 """
 
 from collections import defaultdict
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
+from functools import cache
+
+from modelshare import archive
 
 LABS = {
     "anthropic": ("Anthropic", "#d97757"),
@@ -302,6 +305,7 @@ def payload(bundle: dict, rows: list[dict]) -> dict:
         "open_closed": feeds.get("open-closed") or [],
         "tasks": _tasks(feeds.get("task-spend")),
         "apps": _apps(feeds.get("apps")),
+        "history": history(_archive_rows(), rows, cat),
         "lab_meta": {k: {"name": v[0], "color": v[1]} for k, v in LABS.items()}
         | {"other": {"name": OTHER[1], "color": OTHER[2]}},
     }
@@ -376,3 +380,97 @@ def _apps(feed) -> list[dict]:
             }
         )
     return out
+
+
+@cache
+def _archive_rows() -> tuple[dict, ...]:
+    return tuple(archive.load())
+
+
+def _monday(d: str) -> str:
+    x = date.fromisoformat(d)
+    return (x - timedelta(days=x.weekday())).isoformat()
+
+
+def history(
+    archived, live: list[dict], cat: dict, min_model_share: float = 0.01, min_week_usd: float = 1000
+) -> dict:
+    """Weekly spend and tokens by lab since 2023: archived OpenRouter numbers, then
+    complete weeks of this site's own daily rows. Weeks with neither are null."""
+    weeks: dict[str, dict] = {}
+    for r in archived:
+        w = weeks.setdefault(r["week"], {"source": r["source"], "rows": []})
+        w["rows"].append(r)
+    live_weeks: dict[str, list[dict]] = defaultdict(list)
+    live_days: dict[str, set] = defaultdict(set)
+    for r in live:
+        wk = _monday(r["date"])
+        live_weeks[wk].append(r)
+        live_days[wk].add(r["date"])
+    for wk, rows in live_weeks.items():
+        if len(live_days[wk]) == 7 and wk not in weeks:
+            weeks[wk] = {"source": "live", "rows": rows}
+    # The first weeks of 2023 have a few dollars of spend; shares there are noise.
+    for wk in sorted(weeks):
+        if sum(float(r["spend_usd"] or 0) for r in weeks[wk]["rows"]) >= min_week_usd:
+            break
+        del weeks[wk]
+    if not weeks:
+        return {"weeks": [], "source": [], "labs": {}, "models": []}
+
+    first, last = date.fromisoformat(min(weeks)), date.fromisoformat(max(weeks))
+    grid = []
+    while first <= last:
+        grid.append(first.isoformat())
+        first += timedelta(days=7)
+    n = len(grid)
+    gi = {w: i for i, w in enumerate(grid)}
+
+    lab_spend: dict[str, list] = defaultdict(lambda: [None] * n)
+    lab_tok: dict[str, list] = defaultdict(lambda: [None] * n)
+    model_spend: dict[str, list] = defaultdict(lambda: [None] * n)
+    totals = [0.0] * n
+    for wk, w in weeks.items():
+        i = gi[wk]
+        for r in w["rows"]:
+            lab = lab_of(author_of(r["permaslug"]))
+            usd = float(r["spend_usd"] or 0)
+            t = int(r["prompt"]) + int(r["completion"])
+            lab_spend[lab][i] = (lab_spend[lab][i] or 0) + usd
+            lab_tok[lab][i] = (lab_tok[lab][i] or 0) + t
+            model_spend[r["permaslug"]][i] = (model_spend[r["permaslug"]][i] or 0) + usd
+            totals[i] += usd
+
+    for arrs in (lab_spend, lab_tok):
+        for arr in arrs.values():
+            for i, wk in enumerate(grid):
+                if wk in weeks and arr[i] is None:
+                    arr[i] = 0
+
+    models = []
+    for slug, arr in model_spend.items():
+        peak = max(((v or 0) / totals[i] for i, v in enumerate(arr) if totals[i]), default=0)
+        if peak < min_model_share:
+            continue
+        models.append(
+            {
+                "id": slug,
+                "name": _model_name(slug, cat),
+                "lab": lab_of(author_of(slug)),
+                "spend": [
+                    None if wk not in weeks else round(v or 0)
+                    for wk, v in zip(grid, arr, strict=True)
+                ],
+            }
+        )
+    models.sort(key=lambda m: -sum(v or 0 for v in m["spend"]))
+
+    def rnd(arr):
+        return [None if v is None else round(v) for v in arr]
+
+    return {
+        "weeks": grid,
+        "source": [weeks[w]["source"] if w in weeks else None for w in grid],
+        "labs": {lab: {"spend": rnd(lab_spend[lab]), "tokens": lab_tok[lab]} for lab in lab_spend},
+        "models": models,
+    }

@@ -21,7 +21,7 @@
       <div class="controls">
         <div class="seg" data-ctl="metric"><button data-v="spend" class="on">Spend</button><button data-v="tokens">Tokens</button></div>
         <div class="seg" data-ctl="mode"><button data-v="share" class="on">Share</button><button data-v="abs">Amount</button></div>
-        <div class="seg" data-ctl="range"><button data-v="daily" class="on">30 days, daily</button><button data-v="weekly">1 year, weekly</button></div>
+        <div class="seg" data-ctl="range"><button data-v="daily" class="on">30 days, daily</button><button data-v="weekly">1 year, weekly</button><button data-v="history">Since 2023</button></div>
       </div>
     </div>
     <div id="main-chart" class="chart tall"></div>
@@ -82,7 +82,7 @@
   </section>
 
   <footer class="foot">
-    <p><strong>How this works.</strong> Data comes from OpenRouter's public rankings. Spend shares in the labs and models tables are OpenRouter's own numbers for yesterday, the last 7 days and the last 30 days. Daily dollar amounts are estimates: each model's daily input, cached-input and output tokens priced at OpenRouter list prices, then scaled so each model's 30-day total matches its reported spend share. OpenRouter publishes 31 days of daily detail, so this site saves a snapshot every 6 hours and keeps history from then on. The 1-year view is tokens only and groups everyone outside each week's top 9 makers into Other.</p>
+    <p><strong>How this works.</strong> Data comes from OpenRouter's public rankings. Spend shares in the labs and models tables are OpenRouter's own numbers for yesterday, the last 7 days and the last 30 days. Daily dollar amounts are estimates: each model's daily input, cached-input and output tokens priced at OpenRouter list prices, then scaled so each model's 30-day total matches its reported spend share. OpenRouter publishes 31 days of daily detail, so this site saves a snapshot every 6 hours and keeps history from then on. The 1-year view is tokens only and groups everyone outside each week's top 9 makers into Other. The since-2023 view uses actual weekly spend per model that OpenRouter's rankings page carried until August 2025, read from Internet Archive copies of the page (weekly totals through mid-January 2025, then 7-day totals from about one copy a week), followed by this site's own data once a full week is saved. The page stopped including dollars in late August 2025, so the months in between are blank.</p>
     <p><a href="/api/export.csv">Download daily data (CSV)</a> · <a href="/status">Collector status</a> · <span id="updated"></span></p>
   </footer>
 </main>
