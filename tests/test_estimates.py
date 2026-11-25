@@ -133,3 +133,11 @@ def test_price_book_ignores_free_variant_for_paid_slug():
     paid = {"id": "x/m", "canonical_slug": "x/m-2025", "pricing": {"prompt": "0.000001"}}
     book = estimates.PriceBook({"20251101000000": [free, paid]})
     assert book.get("x/m-2025", date(2025, 11, 1)) == {"prompt": "0.000001"}
+
+
+def test_price_book_ignores_batch_variant_for_paid_slug():
+    paid = {"id": "x/m", "canonical_slug": "x/m-2025", "pricing": {"prompt": "0.000002"}}
+    batch = {"id": "x/m:batch", "canonical_slug": "x/m-2025", "pricing": {"prompt": "0.000001"}}
+    book = estimates.PriceBook({"20251101000000": [batch, paid]})
+    assert book.get("x/m-2025", date(2025, 11, 1)) == {"prompt": "0.000002"}
+    assert book.get("x/m:batch", date(2025, 11, 1)) == {"prompt": "0.000001"}

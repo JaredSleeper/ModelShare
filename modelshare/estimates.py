@@ -103,16 +103,15 @@ class PriceBook:
     def __init__(self, catalogs: dict[str, list[dict]]):
         self.by_slug: dict[str, list[tuple[date, dict]]] = defaultdict(list)
         for ts in sorted(catalogs):
+            base = {m.get("canonical_slug") for m in catalogs[ts] if ":" not in m.get("id", "")}
             for m in catalogs[ts]:
-                # Free variants share the paid model's canonical slug.
-                keys = (
-                    {m.get("id")}
-                    if m.get("id", "").endswith(":free")
-                    else {
-                        m.get("canonical_slug"),
-                        m.get("id"),
-                    }
-                )
+                # Variants (":free", ":batch") share the base model's canonical slug.
+                keys = {m.get("id")}
+                variant = ":" in m.get("id", "")
+                if not m.get("id", "").endswith(":free") and (
+                    not variant or m.get("canonical_slug") not in base
+                ):
+                    keys.add(m.get("canonical_slug"))
                 for k in keys - {None}:
                     self.by_slug[k].append((_taken(ts), m.get("pricing") or {}))
 
