@@ -64,10 +64,11 @@ def _d(s: str) -> str:
 
 def _prices(bundle: dict) -> dict[str, dict]:
     out: dict[str, dict] = {}
-    for m in bundle.get("models") or []:
+    # Variants such as ":batch" share the base model's canonical slug and price.
+    for m in sorted(bundle.get("models") or [], key=lambda m: ":" in m["id"]):
         if m["id"].endswith(":free"):
             continue
-        out[m.get("canonical_slug") or m["id"]] = m.get("pricing") or {}
+        out.setdefault(m.get("canonical_slug") or m["id"], m.get("pricing") or {})
     for c in bundle.get("catalog") or []:
         if c.get("pricing") and c.get("permaslug") and c["permaslug"] not in out:
             out[c["permaslug"]] = c["pricing"]
@@ -165,9 +166,31 @@ def build(bundle: dict, stored_daily: list[dict]) -> tuple[dict, list[dict]]:
     for row in stored_daily or []:
         r = dict(row, date=_iso(row["date"]))
         merged[(r["date"], r["permaslug"], r["variant"])] = r
+    # Re-price stored rows with current list prices; scaling each day by its change
+    # in total keeps that day's official shares.
+    prices = _prices(bundle)
+    old_day: dict[str, float] = defaultdict(float)
+    new_day: dict[str, float] = defaultdict(float)
+    repriced = {}
+    for k, r in merged.items():
+        price = prices.get(r["permaslug"])
+        old = r.get("est_usd") or 0.0
+        repriced[k] = list_cost(r, price) if price else old
+        old_day[r["date"]] += old
+        new_day[r["date"]] += repriced[k]
+    changed = []
+    for k, new in repriced.items():
+        r = merged[k]
+        f = new_day[r["date"]] / old_day[r["date"]] if old_day[r["date"]] > 0 else 1.0
+        if abs(f - 1) > 1e-9 or abs(new - (r.get("est_usd") or 0.0)) > 1e-9 * max(new, 1.0):
+            r["est_usd"] = new
+            r["spend_usd"] = (r.get("spend_usd") or 0.0) * f
+            changed.append(r)
     for r in fresh:
         merged[(r["date"], r["permaslug"], r["variant"])] = r
-    return payload(bundle, list(merged.values())), fresh
+    fresh_keys = {(r["date"], r["permaslug"], r["variant"]) for r in fresh}
+    stale = [r for r in changed if (r["date"], r["permaslug"], r["variant"]) not in fresh_keys]
+    return payload(bundle, list(merged.values())), fresh + stale
 
 
 def _catalog(bundle: dict) -> dict[str, dict]:

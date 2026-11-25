@@ -108,3 +108,33 @@ async def test_collection_persists_and_serves_cached_payload(monkeypatch):
     async with pool.acquire() as connection:
         await connection.execute("TRUNCATE snapshots, daily, runs RESTART IDENTITY")
     await db.close_pool()
+
+
+def test_prices_ignore_batch_variant_sharing_the_slug():
+    paid = {"id": "x/m", "canonical_slug": "x/m-1", "pricing": {"prompt": "0.000002"}}
+    batch = {"id": "x/m:batch", "canonical_slug": "x/m-1", "pricing": {"prompt": "0.000001"}}
+    for models in ([paid, batch], [batch, paid]):
+        assert compute._prices({"models": models})["x/m-1"] == {"prompt": "0.000002"}
+
+
+def test_build_reprices_stored_rows_and_keeps_day_shares():
+    bundle = json.loads(FIXTURE.read_text())
+    priced = set(compute._prices(bundle))
+    eligible = [
+        r for r in compute.daily_rows(bundle) if r["permaslug"] in priced and r["est_usd"] > 0
+    ]
+    day = max({r["date"] for r in eligible}, key=lambda d: sum(r["date"] == d for r in eligible))
+    rows = [dict(r, date="2000-01-01", spend_usd=10.0) for r in eligible if r["date"] == day]
+    assert len(rows) >= 2
+    rows[0]["est_usd"] /= 2
+    _, out = compute.build(bundle, rows)
+    stale = [r for r in out if r["date"] == "2000-01-01"]
+    assert len(stale) == len(rows)
+    for r in stale:
+        assert r["est_usd"] == pytest.approx(
+            compute.list_cost(r, compute._prices(bundle)[r["permaslug"]])
+        )
+    assert len({round(r["spend_usd"], 9) for r in stale}) == 1
+    assert stale[0]["spend_usd"] > 10.0
+    _, again = compute.build(bundle, stale)
+    assert not [r for r in again if r["date"] == "2000-01-01"]
